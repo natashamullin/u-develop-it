@@ -18,7 +18,11 @@ const db = new sqlite3.Database('./db/election.db', err => {
 
 //Get all candidates
 app.get('/api/candidates', (req, res) => {
-    const sql = `SELECT * FRom candidates`;
+    const sql = `SELECT candidates.*, parties.name
+    AS party_name
+    FROM candidates
+    LEFTJOIN parties
+    ON candidates.party_id = parties.id`;
     const params = [];
     db.all(sql, params, (err, rows) => {
         if (err) {
@@ -35,7 +39,12 @@ app.get('/api/candidates', (req, res) => {
 
 // get a single candidate
 app.get('/api/candidates/:id', (req, res) => {
-    const sql = `SELECT * FROM candidates WHERE id = ?`;
+    const sql = `SELECT candidates.*, parties.name
+    AS party_name
+    FROM candidates
+    LEFT JOIN parties
+    ON candidates.party_id = parties.id
+    WHERE candidates.id = ?`;
     const params = [req.params.id];
     db.get(sql, params, (err, row) => {
         if (err) {
@@ -45,6 +54,54 @@ app.get('/api/candidates/:id', (req, res) => {
         res.json({
             message: 'success!',
             data: row
+        });
+    });
+});
+//Create a candidate
+app.post('/api/candidate', ({ body }, res) => {
+    const errors = inputCheck(body, 'first_name', 'last_name', 'industry_connected');
+    if (errors) {
+        res.status(400).json
+            ({ error: errors });
+        return;
+    }
+
+    const sql = `INSERT INTO candidates (first_name, last_name, industry_connected) VALUES (?,?,?)`;
+    const params = [body.first_name, body.last_name, body.industry_connected];
+    // ES5 functio, not arrow function to use `this`
+    db.run(sql, params, function (err, result) {
+        if (err) {
+            res.status(400).json({ error: err.message });
+            return;
+        }
+        res.json({
+            message: 'success!',
+            data: body,
+            id: this.lastID
+        });
+    });
+});
+//updte candidate
+app.put('/api/candidate/:id', (req, res) => {
+    const errors = inputCheck(req.body, 'party_id');
+    if (errors) {
+        res.status(400).json({ error: errors });
+        return;
+    }
+    const sql = `UPDATE candidates SET party_id = ?
+    WHERE ID =?`;
+    const params = [req.body.party_id, req.params.id];
+
+    db.run(sql, params, function (err, result) {
+        if (err) {
+            res.status(400).json({ error: err.message });
+            return; s
+        }
+
+        res.json({
+            message: 'success',
+            data: req.body,
+            changes: this.changes
         });
     });
 });
@@ -64,41 +121,54 @@ app.delete('/api/candidate/:id', (eq, res) => {
         });
     });
 });
-const sql = `INSERT INTO candidates (first_name, last_name, industry_connected) VALUES (?,?,?)`;
-const params = [body.first_name, body.last_name, body.industry_connected];
-// ES5 functio, not arrow function to use `this`
-db.run(sql, params, function (err, result) {
-    if (err) {
-        res.status(400).json({ error: err.message });
-        return;
-    }
-    res.json({
-        message: 'success!',
-        data: body,
-        id: this.lastID
+//party routes 
+//get all parties
+
+app.get('/api/parties', (req, res) => {
+    const sql = `SELECT * FROM parties`;
+    const params = [];
+    bd.all(sql, params, (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.json({
+            message: 'success',
+            data: rows
+        });
+    });
+});
+//get single party
+app.get('/api/party/:id', (req, res) => {
+    const sql = `SELECT * FROM parties WHERE id = ?`;
+    const params = [req.params.id];
+    db.get(sql, params, (err, row) => {
+        if (err) {
+            res.status(400).json({ error: err.message });
+            return;
+        }
+        res.json({
+            message: 'success',
+            data: row
+        });
     });
 });
 
-//Create a candidate
-app.post('/api/candidate', ({ body }, res) => {
-    const errors = inputCheck(body, 'first_name', 'last_name', 'industry_connected');
-    if (errors) {
-        res.status(400).json
-            ({ error: errors });
-        return;
-    }
-});
-const sql = `INSERT INTO candidates (id, first_name, last_name, industry_connected)
-VALUES(?,?,?,?)`;
-const params = [];
 
-//ES5 function, not arrow function, to use this
-db.run(sql, params, function (err, result) {
-    if (err) {
-        console.log(err);
-    }
-    console.log(result, this.lastID);
+
+//delete a party
+app.delete('/api/party/:id', (req, res) => {
+    const sql = `DELETE FROM parties WHERE id = ?`;
+    const params = [req.params.id];
+    db.run(sql, params, function (err, result) {
+        if (err) {
+            res.status(400).json({ error: res.message });
+            return;
+        }
+        res.json({ message: 'successfully deleted', changes: this.changes });
+    });
 });
+
 
 // Default response for an other request(NOt Found) catch all stay at the bottom
 app.use((req, res) => {
